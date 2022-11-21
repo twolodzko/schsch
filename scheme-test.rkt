@@ -1,0 +1,83 @@
+#lang racket/base
+(require "testing.rkt"
+         "eval.rkt"
+         "envir.rkt"
+         "reader.rkt"
+         "scheme.rkt")
+
+(begin
+  (assert-equal (last '()) (void))
+  (assert-equal (last '(1)) 1)
+  (assert-equal (last '(1 2 3)) 3))
+
+(begin
+  (assert-equal (symbol->keyword 'x) '#:x)
+  (assert-equal (symbol->keyword 'car) '#:car))
+
+(define scheme-env (from-records scheme))
+
+(begin
+  (assert-equal (eval-string "'()" scheme-env) '())
+  (assert-equal (eval-string "(car '(1 2 3))" scheme-env) 1)
+  (assert-equal (eval-string "(car '(1 2 3))" scheme-env) 1)
+  (assert-equal (eval-string "(cdr '(1 2 3))" scheme-env) '(2 3))
+  (assert-equal (eval-string "(list)" scheme-env) '())
+  (assert-equal (eval-string "(list 1 #t 'x)" scheme-env) '(1 #t #:x))
+  (assert-equal (eval-string "(cons 1 '())" scheme-env) '(1))
+  (assert-equal (eval-string "(cons 1 '(2 3))" scheme-env) '(1 2 3))
+  (assert-equal (eval-string "(cons 1 2)" scheme-env) '(1 . 2))
+  (assert-equal (eval-string "(+ 2 (* 4 (- 5 2)))" scheme-env) 14)
+  (assert-equal (eval-string "(= 4 (+ 2 2) (* 4 1) (/ 8 (+ 1 1)))" scheme-env) #t)
+  (assert-equal (eval-string "(begin (+ 2 2) (+ 4 5) (car '(1 2 3)))" scheme-env) 1)
+  (assert-equal (eval-string "(symbol? 'x)" scheme-env) #t)
+  (assert-equal (eval-string "(symbol? 'car)" scheme-env) #t)
+  (assert-equal (eval-string "(symbol? 42)" scheme-env) #f)
+  (assert-equal (eval-string "(symbol? '42)" scheme-env) #f)
+  (assert-equal (eval-string "(symbol? #t)" scheme-env) #f)
+  (assert-equal (eval-string "(let ((x 1) (y 2)) (+ x y))" scheme-env) 3)
+  (assert-equal (eval-string "(let ((x 1)) (let ((y (+ x 1))) (+ x y)))" scheme-env) 3)
+  (assert-equal (eval-string "(let ((x 1)) (let ((x (+ x 1))) (+ x 10)))" scheme-env) 12)
+  (assert-equal (eval-string "(let* ((x 1) (y 2)) (+ x y))" scheme-env) 3)
+  (assert-equal (eval-string "(let* ((x 1) (y (+ x 1))) (+ x y))" scheme-env) 3)
+  (assert-equal (eval-string "((lambda (x) x) 42)" scheme-env) 42)
+  (assert-equal (eval-string "(let ((x 1) (y 1)) (let ((x (* 10 x))) (+ x y)))" scheme-env) 11)
+  (assert-equal (eval-string "(let* () '())" scheme-env) '())
+  (assert-equal (eval-string "(let* () (+ 2 2))" scheme-env) 4)
+  (assert-equal (eval-string "(let* ((x 1) (y 2)) (+ x y))" scheme-env) 3)
+  (assert-equal (eval-string "(let* ((x 1) (y (- 3 1))) (car '(1 2 3))(+ x y))" scheme-env) 3)
+  (assert-equal (eval-string "(let* ((x 1) (y (+ x 1))) (+ x y))" scheme-env) 3)
+  (assert-equal (eval-string "((lambda (x) x) 42)" scheme-env) 42)
+  (assert-equal (eval-string "((lambda (x y) (+ x y)) 2 3)" scheme-env) 5)
+  (assert-equal (eval-string "((lambda (x) (let ((x (+ x 1))) (* x 2))) 1)" scheme-env) 4)
+  (assert-equal (eval-string "(((lambda (x) (lambda (y) (/ x y))) 1) 2)" scheme-env) 1/2)
+  (assert-equal (eval-string "(let ((x 2)) ((lambda (y) (+ y (+ x 1))) x))" scheme-env) 5)
+  (assert-equal (eval-string "((let ((x 2)) (lambda (y) (+ x y))) 3)" scheme-env) 5)
+  (assert-equal (eval-string "((let* ((x 1) (z (+ x 1))) (lambda (y) (+ x y z))) 3)" scheme-env) 6)
+  (assert-equal (eval-string "(and)" scheme-env) #t)
+  (assert-equal (eval-string "(and #t)" scheme-env) #t)
+  (assert-equal (eval-string "(and #f)" scheme-env) #f)
+  (assert-equal (eval-string "(and #t #t)" scheme-env) #t)
+  (assert-equal (eval-string "(and #t #f #t)" scheme-env) #f)
+  (assert-equal (eval-string "(and (+ 2 2) (car '(#t #f)) '())" scheme-env) #t)
+  (assert-equal (eval-string "(or)" scheme-env) #f)
+  (assert-equal (eval-string "(or #t)" scheme-env) #t)
+  (assert-equal (eval-string "(or #f)" scheme-env) #f)
+  (assert-equal (eval-string "(or #f #t (error 'wat))" scheme-env) #t)
+  (assert-equal (eval-string "(or #f '())" scheme-env) #t)
+  (assert-equal (eval-string "(eval '(+ 2 2))" scheme-env) 4)
+  (assert-equal (eval-string "(if (car '(#t #f)) (+ 2 2) (error 'wat))" scheme-env) 4)
+  (assert-equal (eval-string "(if (car '(#f #t)) (error 'wat) (+ 2 2))" scheme-env) 4)
+  (assert-equal (eval-string "(if else 1 2)" scheme-env) 1)
+  (assert-equal (eval-string "(cond (#t 'ok))" scheme-env) '#:ok)
+  (assert-equal (eval-string "(cond (#t 1) (#t 2) (#f 3))" scheme-env) 1)
+  (assert-equal (eval-string "(cond (#f 1) (#t 2) (#f 3))" scheme-env) 2)
+  (assert-equal (eval-string "(cond ((= 4 (+ 2 2)) (+ 3 2)) ((< 10 5) (error 'wat)))" scheme-env) 5))
+
+(let ([env (from-envir scheme-env)])
+  (eval-string "(define x 1)" env)
+  (eval-string "(define y 2)" env)
+  (assert-equal (eval-string "(+ x y)" env) 3))
+
+(begin
+  (assert-equal (eval-file "examples/test.scm" scheme-env)
+                (eval-string "(load \"examples/test.scm\")" scheme-env)))
